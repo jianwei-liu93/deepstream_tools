@@ -48,19 +48,20 @@ class ImageEncoder(nn.Module):
             "backbone_fpn": backbone_fpn,
             "vision_pos_enc": vision_pos_enc,
         }
+        batch_size = image.size(0)
         for i, feat in enumerate(expanded_backbone_out["backbone_fpn"]):
-            expanded_backbone_out["backbone_fpn"][i] = feat.expand(1, -1, -1, -1)
+            expanded_backbone_out["backbone_fpn"][i] = feat.expand(batch_size, -1, -1, -1)
         for i, pos in enumerate(expanded_backbone_out["vision_pos_enc"]):
-            expanded_backbone_out["vision_pos_enc"][i] = pos.expand(1, -1, -1, -1)
+            expanded_backbone_out["vision_pos_enc"][i] = pos.expand(batch_size, -1, -1, -1)
 
         (_, current_vision_feats, current_vision_pos_embeds, _) = self.prepare_backbone_features(expanded_backbone_out)
 
         current_vision_feat = current_vision_feats[-1] + self.no_mem_embed
-        current_vision_feat2 = current_vision_feat.reshape(64, 64, 1, 256).permute(2, 3, 0, 1)  # [1,256,64,64]
+        current_vision_feat2 = current_vision_feat.reshape(64, 64, batch_size, 256).permute(2, 3, 0, 1)  # [batch_size,256,64,64]
 
         # flatten HWxNxC -> NxCxHxW
-        high_res_features_0 = current_vision_feats[0].reshape(256, 256, 1, 32).permute(2, 3, 0, 1)  # [1, 32, 256, 256]
-        high_res_features_1 = current_vision_feats[1].reshape(128, 128, 1, 64).permute(2, 3, 0, 1)  # [1, 64, 128, 128]
+        high_res_features_0 = current_vision_feats[0].reshape(256, 256, batch_size, 32).permute(2, 3, 0, 1)  # [batch_size, 32, 256, 256]
+        high_res_features_1 = current_vision_feats[1].reshape(128, 128, batch_size, 64).permute(2, 3, 0, 1)  # [batch_size, 64, 128, 128]
 
         # pix_feat              [1, 256, 64, 64]
         # high_res_features_0   [1, 32, 256, 256]
@@ -91,25 +92,18 @@ class MemAttention(nn.Module):
     ) -> tuple[Any]:
         start_time = time.time()
         num_obj_ptr_tokens = memory_0.shape[1] * 4  # old: shape[0]
-        current_vision_feat = current_vision_feat.permute(2, 3, 0, 1).reshape(4096, 1, 256)
-        current_vision_feat = current_vision_feat - self.no_mem_embed
-
         batch_size = memory_0.size()[0]
         num_obj_ptr = memory_0.size()[1]
         num_masks = memory_1.size()[1]
+        
+        current_vision_feat = current_vision_feat.permute(2, 3, 0, 1).reshape(4096, batch_size, 256)
+        current_vision_feat = current_vision_feat - self.no_mem_embed
 
-        current_vision_feat = current_vision_feat.repeat(1, batch_size, 1)
-        current_vision_pos_embed = current_vision_pos_embed.repeat(1, batch_size, 1)
-
-        # [20,16,256] -> [20,16,4,64] -> [16,4,20,64] -> [64,20,64]
+        # [batch_size,16,256] -> [batch_size,16,4,64] -> [16,4,batch_size,64] -> [64,batch_size,64]
         memory_0 = memory_0.reshape(batch_size, -1, 4, 64)
         memory_0 = memory_0.permute(1, 2, 0, 3).flatten(0, 1)
 
-        # old [16,256] -> [16,1,4,64] -> [16,4,1,64] -> [64,1,64]
-        # memory_0 = memory_0.reshape(-1,1,4,64)
-        # memory_0 = memory_0.permute(0, 2, 1, 3).flatten(0, 1)
-
-        # [20,7,64,64,64] -> [20,7,64,64*64] -> [7,64*64,20,64] -> [7*64*64,20, 64]
+        # [batch_size,7,64,64,64] -> [batch_size,7,64,64*64] -> [7,64*64,batch_size,64] -> [7*64*64,batch_size, 64]
         memory_1 = memory_1.view(batch_size, -1, 64, 64*64).permute(1, 3, 0, 2)
         memory_1 = memory_1.reshape(-1, batch_size, 64)
 
@@ -165,7 +159,6 @@ class MemEncoder(nn.Module):
         start_time = time.time()
 
         batch_size = mask_for_mem.shape[0]
-        pix_feat = pix_feat.repeat(batch_size, 1, 1, 1)
 
         maskmem_features, maskmem_pos_enc = self.model._encode_new_memory(
             current_vision_feats=pix_feat,
@@ -204,8 +197,7 @@ class MaskDecoder(nn.Module):
         point_inputs = {"point_coords": point_coords, "point_labels": point_labels}
 
         batch_size = point_coords.size()[0]
-        if True:
-            # image_embed = image_embed.repeat(batch_size, 1, 1, 1) image embedding can be different for each object when using memory bank
+        if high_res_feats_0.size(0) != batch_size:
             high_res_feats_0 = high_res_feats_0.repeat(batch_size, 1, 1, 1)
             high_res_feats_1 = high_res_feats_1.repeat(batch_size, 1, 1, 1)
         high_res_feats = [high_res_feats_0, high_res_feats_1]

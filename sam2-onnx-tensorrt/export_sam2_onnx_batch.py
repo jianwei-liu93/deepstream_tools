@@ -31,6 +31,14 @@ def export_image_encoder(model,onnx_path):
     input_img = torch.randn(1, 3,1024, 1024).cpu()
     out = model(input_img)
     output_names = ["pix_feat","high_res_feat0","high_res_feat1","vision_feats","vision_pos_embed"]
+    dynamic_axes = {
+        "image": {0: "batch_size"},
+        "pix_feat": {0: "batch_size"},
+        "high_res_feat0": {0: "batch_size"},
+        "high_res_feat1": {0: "batch_size"},
+        "vision_feats": {0: "batch_size"},
+        "vision_pos_embed": {1: "batch_size"}
+    }
     torch.onnx.export(
         model,
         input_img,
@@ -40,6 +48,7 @@ def export_image_encoder(model,onnx_path):
         do_constant_folding=True,
         input_names=["image"],
         output_names=output_names,
+        dynamic_axes=dynamic_axes,
     )
     onnx_model = onnx.load(onnx_path+"image_encoder.onnx")
     onnx.checker.check_model(onnx_model)
