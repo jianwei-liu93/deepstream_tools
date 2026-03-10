@@ -194,7 +194,8 @@ class SAM2Base(torch.nn.Module):
                 dynamic=False,
             )
 
-        assert(self.image_size == 1024)
+        assert self.image_size in [256, 512, 640, 1024]
+        assert self.image_size % 16 == 0
         assert(self.num_feature_levels == 3)
         assert(self.hidden_dim == 256)
         assert(self.num_maskmem == 7)

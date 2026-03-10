@@ -10,7 +10,7 @@ from sam2.build_sam import build_sam2
 
 def export_image_encoder(model,onnx_path, batch_size=3):
     print(">>> Exporting Image Encoder...")
-    input_img = torch.randn(batch_size, 3, 640, 640).cpu()
+    input_img = torch.randn(batch_size, 3, 256, 256).cpu()
     out = model(input_img)
     output_names = ["pix_feat","high_res_feat0","high_res_feat1","vision_feats","vision_pos_embed"]
     torch.onnx.export(
@@ -30,11 +30,11 @@ def export_image_encoder(model,onnx_path, batch_size=3):
 
 def export_memory_attention(model,onnx_path, batch_size=3):
     print(">>> Exporting Memory Attention...")
-    current_vision_feat = torch.randn(batch_size,256,40,40)      #[batch_size, 256, 40, 40]
-    current_vision_pos_embed = torch.randn(1600,batch_size,256)  #[1600, batch_size, 256]
+    current_vision_feat = torch.randn(batch_size,256,16,16)      #[batch_size, 256, 16, 16]
+    current_vision_pos_embed = torch.randn(256,batch_size,256)  #[256, batch_size, 256]
     memory_0 = torch.randn(batch_size,16,256) # [batch size, num obj ptr, feature size]
-    memory_1 = torch.randn(batch_size,7,64,40,40)
-    memory_pos_embed = torch.randn(batch_size,7*1600+64,64)      #[y*1600,1,64]
+    memory_1 = torch.randn(batch_size,7,64,16,16)
+    memory_pos_embed = torch.randn(batch_size,7*256+64,64)      #[y*256,1,64]
     cond_frame_id_diff = torch.tensor(10.0)
     out = model(
             current_vision_feat = current_vision_feat,
@@ -76,9 +76,9 @@ def export_mask_decoder(model,onnx_path, batch_size=3):
     print(">>> Exporting Mask Decoder...")
     point_coords = torch.randn(batch_size,2,2).cpu()
     point_labels = torch.randn(batch_size,2).cpu()
-    image_embed = torch.randn(batch_size,256,40,40).cpu()
-    high_res_feats_0 = torch.randn(batch_size,32,160,160).cpu()
-    high_res_feats_1 = torch.randn(batch_size,64,80,80).cpu()
+    image_embed = torch.randn(batch_size,256,16,16).cpu()
+    high_res_feats_0 = torch.randn(batch_size,32,64,64).cpu()
+    high_res_feats_1 = torch.randn(batch_size,64,32,32).cpu()
 
     out = model(
         point_coords = point_coords,
@@ -112,8 +112,8 @@ def export_mask_decoder(model,onnx_path, batch_size=3):
 
 def export_memory_encoder(model,onnx_path, batch_size=3):
     print(">>> Exporting Memory Encoder...")
-    mask_for_mem = torch.randn(batch_size,1,640,640)
-    pix_feat = torch.randn(batch_size,256,40,40)
+    mask_for_mem = torch.randn(batch_size,1,256,256)
+    pix_feat = torch.randn(batch_size,256,16,16)
     occ_logit = torch.randn(batch_size,1)
 
     out = model(mask_for_mem = mask_for_mem,pix_feat = pix_feat,occ_logit = occ_logit)
@@ -138,8 +138,8 @@ def export_memory_encoder(model,onnx_path, batch_size=3):
 
 if __name__ == "__main__":
     model_type = "tiny"
-    outdir = "/home/jianwei/vsim/unitree_g1_hw_endpoint/image_processing/sam2_onnx/tiny_batch3_640/"
-    config = "configs/sam2.1/sam2.1_hiera_t_640.yaml"
+    outdir = "/home/jianwei/vsim/unitree_g1_hw_endpoint/image_processing/sam2_onnx/tiny_batch3_256/"
+    config = "configs/sam2.1/sam2.1_hiera_t_256.yaml"
     checkpoint = "checkpoints/sam2.1_hiera_tiny.pt"
     batch_size = 3
 
