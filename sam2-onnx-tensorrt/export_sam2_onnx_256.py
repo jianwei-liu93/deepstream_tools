@@ -9,6 +9,16 @@ from src.Module import MemAttention
 from src.Module import MemEncoder
 from src.Module import MaskDecoder
 from sam2.build_sam import build_sam2
+from onnx.shape_inference import infer_shapes
+
+def as_tensorrt_compatible(onnx_path):
+    print(f">>> Making {onnx_path} TensorRT compatible...")
+    model = onnx.load(onnx_path)
+    # Run shape inference
+    model = infer_shapes(model)
+    onnx.save(model, onnx_path)
+    print(f"[SUCCESS] {onnx_path} is now TensorRT compatible.")
+
 
 
 def export_image_encoder(model,onnx_path):
@@ -24,7 +34,7 @@ def export_image_encoder(model,onnx_path):
         input_img,
         onnx_path+"image_encoder.onnx",
         export_params=True,
-        opset_version=17,
+        opset_version=15,
         do_constant_folding=True,
         input_names=["image"],
         output_names=output_names,
@@ -32,6 +42,7 @@ def export_image_encoder(model,onnx_path):
     )
     onnx_model = onnx.load(onnx_path+"image_encoder.onnx")
     onnx.checker.check_model(onnx_model)
+    as_tensorrt_compatible(onnx_path+"image_encoder.onnx")
     print("[SUCCESS] Image Encoder exported successfully!")
 
 
@@ -71,7 +82,7 @@ def export_memory_attention(model,onnx_path):
         (current_vision_feat,current_vision_pos_embed,memory_0,memory_1,memory_pos_embed,cond_frame_id_diff),
         onnx_path+"memory_attention.onnx",
         export_params=True,
-        opset_version=17,
+        opset_version=15,
         do_constant_folding=True,
         input_names= input_name,
         output_names=["image_embed"],
@@ -79,6 +90,7 @@ def export_memory_attention(model,onnx_path):
     )
     onnx_model = onnx.load(onnx_path+"memory_attention.onnx")
     onnx.checker.check_model(onnx_model)
+    as_tensorrt_compatible(onnx_path+"memory_attention.onnx")
     print("[SUCCESS] Memory Attention exported successfully!")
 
 
@@ -109,7 +121,7 @@ def export_mask_decoder(model,onnx_path):
         (point_coords,point_labels,test_image_embed,test_high_res_feats_0,test_high_res_feats_1),
         onnx_path+"mask_decoder.onnx",
         export_params=True,
-        opset_version=17,
+        opset_version=15,
         do_constant_folding=True,
         input_names= input_name,
         output_names=output_name,
@@ -117,6 +129,7 @@ def export_mask_decoder(model,onnx_path):
     )
     onnx_model = onnx.load(onnx_path+"mask_decoder.onnx")
     onnx.checker.check_model(onnx_model)
+    as_tensorrt_compatible(onnx_path+"mask_decoder.onnx")
     print("[SUCCESS] Mask Decoder exported successfully!")
 
 
@@ -137,7 +150,7 @@ def export_memory_encoder(model,onnx_path):
         (test_mask_for_mem,test_pix_feat,occ_logit),
         onnx_path+"memory_encoder.onnx",
         export_params=True,
-        opset_version=17,
+        opset_version=15,
         do_constant_folding=True,
         input_names= input_names,
         output_names= output_names,
@@ -145,6 +158,7 @@ def export_memory_encoder(model,onnx_path):
     )
     onnx_model = onnx.load(onnx_path+"memory_encoder.onnx")
     onnx.checker.check_model(onnx_model)
+    as_tensorrt_compatible(onnx_path+"memory_encoder.onnx")
     print("[SUCCESS] Memory Encoder exported successfully!")
 
 

@@ -3,6 +3,16 @@ import torch
 import onnx
 from src.Module import ImageEncoder
 from sam2.build_sam import build_sam2
+from onnx.shape_inference import infer_shapes
+
+def as_tensorrt_compatible(onnx_path):
+    print(f">>> Making {onnx_path} TensorRT compatible...")
+    model = onnx.load(onnx_path)
+    # Run shape inference
+    model = infer_shapes(model)
+    onnx.save(model, onnx_path)
+    print(f"[SUCCESS] {onnx_path} is now TensorRT compatible.")
+
 
 def export_image_encoder(model, onnx_path):
     print(">>> Exporting Image Encoder (Batch 3)...")
@@ -15,13 +25,14 @@ def export_image_encoder(model, onnx_path):
         input_img,
         os.path.join(onnx_path, "image_encoder.onnx"),
         export_params=True,
-        opset_version=17,
+        opset_version=15,
         do_constant_folding=True,
         input_names=["image"],
         output_names=output_names,
     )
     onnx_model = onnx.load(os.path.join(onnx_path, "image_encoder.onnx"))
     onnx.checker.check_model(onnx_model)
+    as_tensorrt_compatible(os.path.join(onnx_path, "image_encoder.onnx"))
     print("[SUCCESS] Image Encoder (Batch 3) exported successfully!")
 
 if __name__ == "__main__":
