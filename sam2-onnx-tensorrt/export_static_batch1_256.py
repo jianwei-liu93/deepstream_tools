@@ -2,6 +2,7 @@ import os
 import torch
 import onnx
 import argparse
+import onnxsim
 from src.Module import ImageEncoder
 from src.Module import MemAttention
 from src.Module import MemEncoder
@@ -10,11 +11,18 @@ from sam2.build_sam import build_sam2
 from onnx.shape_inference import infer_shapes
 
 def as_tensorrt_compatible(onnx_path):
-    print(f">>> Making {onnx_path} TensorRT compatible...")
+    print(f">>> Making {onnx_path} TensorRT compatible (Simplifying)...")
     model = onnx.load(onnx_path)
-    # Run shape inference
-    model = infer_shapes(model)
-    onnx.save(model, onnx_path)
+    
+    # 1. Simplify graph (Folds constants, removes redundant Reshapes/Transposes)
+    model_sim, check = onnxsim.simplify(model)
+    if not check:
+        print(f"[WARNING] onnxsim check failed for {onnx_path}")
+    
+    # 2. Run shape inference
+    model_sim = infer_shapes(model_sim)
+    
+    onnx.save(model_sim, onnx_path)
     print(f"[SUCCESS] {onnx_path} is now TensorRT compatible.")
 
 
@@ -62,10 +70,12 @@ def export_memory_attention(model,onnx_path, batch_size=1):
                 "memory_pos_embed",
                 "cond_frame_id_diff",]
     # For MemAttention, keep number of memories dynamic, but batch size static
+    # For MemAttention on Jetson (Better Way): Keep axes static to avoid fusion bugs
+    # If you need dynamic frames, you should pad with zeros to the max size (7)
     dynamic_axes = {
-        "memory_0": {1: "num"},
-        "memory_1": {1: "buff_size"},
-        "memory_pos_embed": {1: "buff_size_embed"}
+        # "memory_0": {1: "num"},
+        # "memory_1": {1: "buff_size"},
+        # "memory_pos_embed": {1: "buff_size_embed"}
     }
     torch.onnx.export(
         model,
