@@ -38,7 +38,6 @@ def export_image_encoder(model,onnx_path):
         do_constant_folding=True,
         input_names=["image"],
         output_names=output_names,
-        dynamic_axes=dynamic_axes,
     )
     onnx_model = onnx.load(onnx_path+"image_encoder.onnx")
     onnx.checker.check_model(onnx_model)
@@ -49,7 +48,7 @@ def export_image_encoder(model,onnx_path):
 def export_memory_attention(model,onnx_path):
     print(">>> Exporting Memory Attention...")
     batch_size = 1
-    num_obj_ptr = 4
+    num_obj_ptr = 16
     num_mask = 7 
     
     current_vision_feat = torch.randn(batch_size, 256, 16, 16, dtype=torch.float32).cpu()

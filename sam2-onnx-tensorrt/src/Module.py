@@ -126,7 +126,9 @@ class MemAttention(nn.Module):
             obj_pos = self.obj_ptr_tpos_proj(obj_pos)
             obj_pos = obj_pos.unsqueeze(1).expand(-1, batch_size, 64)  # [num_obj_ptr,batch_size,64]
             obj_pos = obj_pos.repeat_interleave(4, dim=0)  # [4*num_obj_ptr,batch_size,64]
-            memory_pos_embed[num_masks*256 : num_masks*256+4*num_obj_ptr] = obj_pos
+            # memory_pos_embed[num_masks*256 : num_masks*256+4*num_obj_ptr] = obj_pos
+            mask_pos = memory_pos_embed[:num_masks*256, :, :]
+            memory_pos_embed = torch.cat([mask_pos, obj_pos], dim=0)
 
 
         memory = torch.cat((memory_1, memory_0), dim=0)
