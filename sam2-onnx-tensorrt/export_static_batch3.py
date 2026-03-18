@@ -25,7 +25,7 @@ def export_image_encoder(model, onnx_path):
         input_img,
         os.path.join(onnx_path, "image_encoder.onnx"),
         export_params=True,
-        opset_version=15,
+        opset_version=17,
         do_constant_folding=True,
         input_names=["image"],
         output_names=output_names,

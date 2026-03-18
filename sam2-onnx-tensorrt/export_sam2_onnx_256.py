@@ -34,10 +34,11 @@ def export_image_encoder(model,onnx_path):
         input_img,
         onnx_path+"image_encoder.onnx",
         export_params=True,
-        opset_version=15,
+        opset_version=17,
         do_constant_folding=True,
         input_names=["image"],
         output_names=output_names,
+        dynamic_axes=dynamic_axes,
     )
     onnx_model = onnx.load(onnx_path+"image_encoder.onnx")
     onnx.checker.check_model(onnx_model)
@@ -74,14 +75,14 @@ def export_memory_attention(model,onnx_path):
     dynamic_axes = {
         "memory_0": {1: "num"},
         "memory_1": {1: "buff_size"},
-        "memory_pos_embed": {1: "buff_size_embed"}
+        "memory_pos_embed": {1: "buff_size_embed"},
     }
     torch.onnx.export(
         model,
         (current_vision_feat,current_vision_pos_embed,memory_0,memory_1,memory_pos_embed,cond_frame_id_diff),
         onnx_path+"memory_attention.onnx",
         export_params=True,
-        opset_version=15,
+        opset_version=17,
         do_constant_folding=True,
         input_names= input_name,
         output_names=["image_embed"],
@@ -120,7 +121,7 @@ def export_mask_decoder(model,onnx_path):
         (point_coords,point_labels,test_image_embed,test_high_res_feats_0,test_high_res_feats_1),
         onnx_path+"mask_decoder.onnx",
         export_params=True,
-        opset_version=15,
+        opset_version=17,
         do_constant_folding=True,
         input_names= input_name,
         output_names=output_name,
@@ -137,19 +138,20 @@ def export_memory_encoder(model,onnx_path):
     batch_size = 1
     test_mask_for_mem = torch.randn(batch_size, 1, 256, 256, dtype=torch.float32).cpu()
     test_pix_feat = torch.randn(batch_size, 256, 16, 16, dtype=torch.float32).cpu()
-    occ_logit = torch.randn(1,1)
+    occ_logit = torch.randn(batch_size, 1)
     dynamic_axes = {}
 
     out = model(mask_for_mem = test_mask_for_mem,pix_feat = test_pix_feat,occ_logit = occ_logit)
 
     input_names = ["mask_for_mem","pix_feat","occ_logit"]
     output_names = ["maskmem_features","maskmem_pos_enc","temporal_code"]
+    dynamic_axes = {}
     torch.onnx.export(
         model,
         (test_mask_for_mem,test_pix_feat,occ_logit),
         onnx_path+"memory_encoder.onnx",
         export_params=True,
-        opset_version=15,
+        opset_version=17,
         do_constant_folding=True,
         input_names= input_names,
         output_names= output_names,

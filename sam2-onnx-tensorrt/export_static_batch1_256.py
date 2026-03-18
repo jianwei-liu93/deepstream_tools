@@ -18,7 +18,7 @@ def as_tensorrt_compatible(onnx_path):
     print(f"[SUCCESS] {onnx_path} is now TensorRT compatible.")
 
 
-def export_image_encoder(model,onnx_path, batch_size=3):
+def export_image_encoder(model,onnx_path, batch_size=1):
     print(">>> Exporting Image Encoder...")
     input_img = torch.randn(batch_size, 3, 256, 256).cpu()
     out = model(input_img)
@@ -39,7 +39,7 @@ def export_image_encoder(model,onnx_path, batch_size=3):
     print(f"[SUCCESS] Image Encoder (Batch {batch_size}) exported successfully!")
 
 
-def export_memory_attention(model,onnx_path, batch_size=3):
+def export_memory_attention(model,onnx_path, batch_size=1):
     print(">>> Exporting Memory Attention...")
     current_vision_feat = torch.randn(batch_size,256,16,16)      #[batch_size, 256, 16, 16]
     current_vision_pos_embed = torch.randn(256,batch_size,256)  #[256, batch_size, 256]
@@ -84,7 +84,7 @@ def export_memory_attention(model,onnx_path, batch_size=3):
     print(f"[SUCCESS] Memory Attention (Batch {batch_size}) exported successfully!")
 
 
-def export_mask_decoder(model,onnx_path, batch_size=3):
+def export_mask_decoder(model,onnx_path, batch_size=1):
     print(">>> Exporting Mask Decoder...")
     point_coords = torch.randn(batch_size,2,2).cpu()
     point_labels = torch.randn(batch_size,2).cpu()
@@ -123,7 +123,7 @@ def export_mask_decoder(model,onnx_path, batch_size=3):
     print(f"[SUCCESS] Mask Decoder (Batch {batch_size}) exported successfully!")
 
 
-def export_memory_encoder(model,onnx_path, batch_size=3):
+def export_memory_encoder(model,onnx_path, batch_size=1):
     print(">>> Exporting Memory Encoder...")
     mask_for_mem = torch.randn(batch_size,1,256,256)
     pix_feat = torch.randn(batch_size,256,16,16)
@@ -152,10 +152,10 @@ def export_memory_encoder(model,onnx_path, batch_size=3):
 
 if __name__ == "__main__":
     model_type = "tiny"
-    outdir = "/home/jianwei/vsim/unitree_g1_hw_endpoint/image_processing/sam2_onnx/tiny_batch3_256/"
+    outdir = "/home/jianwei/vsim/unitree_g1_hw_endpoint/image_processing/sam2_onnx/tiny_256/"
     config = "configs/sam2.1/sam2.1_hiera_t_256.yaml"
     checkpoint = "checkpoints/sam2.1_hiera_tiny.pt"
-    batch_size = 3
+    batch_size = 1
 
     os.makedirs(outdir, exist_ok=True)
 
