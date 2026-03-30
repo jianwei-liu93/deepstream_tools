@@ -57,11 +57,20 @@ class ImageEncoder(nn.Module):
         (_, current_vision_feats, current_vision_pos_embeds, _) = self.prepare_backbone_features(expanded_backbone_out)
 
         current_vision_feat = current_vision_feats[-1] + self.no_mem_embed
-        current_vision_feat2 = current_vision_feat.reshape(16, 16, batch_size, 256).permute(2, 3, 0, 1)  # [batch_size,256,40,40]
+        
+        # Calculate dynamic shapes
+        hw_low = current_vision_feats[-1].shape[0]
+        h_low = int(hw_low**0.5)
+        w_low = h_low
+        current_vision_feat2 = current_vision_feat.reshape(h_low, w_low, batch_size, 256).permute(2, 3, 0, 1)
 
-        # flatten HWxNxC -> NxCxHxW
-        high_res_features_0 = current_vision_feats[0].reshape(64, 64, batch_size, 32).permute(2, 3, 0, 1)  # [batch_size, 32, 64, 64]
-        high_res_features_1 = current_vision_feats[1].reshape(32, 32, batch_size, 64).permute(2, 3, 0, 1)  # [batch_size, 64, 32, 32]
+        hw0 = current_vision_feats[0].shape[0]
+        h0 = int(hw0**0.5)
+        high_res_features_0 = current_vision_feats[0].reshape(h0, h0, batch_size, 32).permute(2, 3, 0, 1)
+
+        hw1 = current_vision_feats[1].shape[0]
+        h1 = int(hw1**0.5)
+        high_res_features_1 = current_vision_feats[1].reshape(h1, h1, batch_size, 64).permute(2, 3, 0, 1)
 
         # pix_feat              [1, 256, 64, 64]
         # high_res_features_0   [1, 32, 256, 256]
@@ -96,15 +105,16 @@ class MemAttention(nn.Module):
         num_obj_ptr = memory_0.size()[1]
         num_masks = memory_1.size()[1]
         
-        current_vision_feat = current_vision_feat.permute(2, 3, 0, 1).reshape(256, batch_size, 256)
+        current_vision_feat = current_vision_feat.permute(2, 3, 0, 1).reshape(-1, batch_size, 256)
         current_vision_feat = current_vision_feat - self.no_mem_embed
+        hw = current_vision_feat.shape[0]
 
         # [batch_size,16,256] -> [batch_size,16,4,64] -> [16,4,batch_size,64] -> [64,batch_size,64]
         memory_0 = memory_0.reshape(batch_size, -1, 4, 64)
         memory_0 = memory_0.permute(1, 2, 0, 3).flatten(0, 1)
 
-        # [batch_size,7,64,40,40] -> [batch_size,7,64,16*16] -> [7,16*16,batch_size,64] -> [7*16*16,batch_size, 64]
-        memory_1 = memory_1.view(batch_size, -1, 64, 16*16).permute(1, 3, 0, 2)
+        # [batch_size,7,64,H/16,W/16] -> [batch_size,7,64,HW] -> [7,HW,batch_size,64] -> [7*HW,batch_size, 64]
+        memory_1 = memory_1.view(batch_size, -1, 64, hw).permute(1, 3, 0, 2)
         memory_1 = memory_1.reshape(-1, batch_size, 64)
 
         # old [7,64,64,64] -> [7,64,64*64] -> [7,64*64,64] -> [7*64*64,1, 64]
@@ -127,7 +137,7 @@ class MemAttention(nn.Module):
             obj_pos = obj_pos.unsqueeze(1).expand(-1, batch_size, 64)  # [num_obj_ptr,batch_size,64]
             obj_pos = obj_pos.repeat_interleave(4, dim=0)  # [4*num_obj_ptr,batch_size,64]
             # memory_pos_embed[num_masks*256 : num_masks*256+4*num_obj_ptr] = obj_pos
-            mask_pos = memory_pos_embed[:num_masks*256, :, :]
+            mask_pos = memory_pos_embed[:num_masks*hw, :, :]
             memory_pos_embed = torch.cat([mask_pos, obj_pos], dim=0)
 
 
@@ -140,7 +150,8 @@ class MemAttention(nn.Module):
             num_obj_ptr_tokens=num_obj_ptr_tokens,
         )
         # reshape the output (HW)xBxC => BxCxHxW
-        image_embed = pix_feat_with_mem.permute(1, 2, 0).view(batch_size, 256, 16, 16)  # [1,256,40,40]
+        h_low = int(hw**0.5)
+        image_embed = pix_feat_with_mem.permute(1, 2, 0).view(batch_size, 256, h_low, h_low)
         end_time = time.time()
 
         return image_embed  # [1,256,40,40]
@@ -150,7 +161,6 @@ class MemEncoder(nn.Module):
         super().__init__()
         self.model = sam_model
         self.maskmem_tpos_enc = sam_model.maskmem_tpos_enc
-        self.feat_sizes = [(64, 64), (32, 32), (16, 16)]
     @torch.no_grad()
     def forward(
         self,
@@ -162,15 +172,21 @@ class MemEncoder(nn.Module):
 
         batch_size = mask_for_mem.shape[0]
 
+        # Determine feat_sizes dynamically
+        h_low = pix_feat.shape[2]
+        w_low = pix_feat.shape[3]
+        feat_sizes = [(h_low*4, w_low*4), (h_low*2, w_low*2), (h_low, w_low)]
+
         maskmem_features, maskmem_pos_enc = self.model._encode_new_memory(
             current_vision_feats=pix_feat,
-            feat_sizes=self.feat_sizes,
+            feat_sizes=feat_sizes,
             pred_masks_high_res=mask_for_mem,
             is_mask_from_pts=True,
             object_score_logits=occ_logit,
         )
         # maskmem_features = maskmem_features.view(1, 64, 16*16) # .permute(2, 0, 1)
-        maskmem_pos_enc = maskmem_pos_enc[0].view(batch_size, 64, 16*16).permute(0, 2, 1)  # .permute(2, 0, 1)
+        hw_low = h_low * w_low
+        maskmem_pos_enc = maskmem_pos_enc[0].view(batch_size, 64, hw_low).permute(0, 2, 1)  # .permute(2, 0, 1)
 
 
         end_time = time.time()
@@ -195,7 +211,12 @@ class MaskDecoder(nn.Module):
         high_res_feats_1: torch.Tensor,  # [1, 64, 32, 32]
     ):
         start_time = time.time()
-        frame_size = [256, 256]
+        # Use full resolution for pred_mask output
+        # pred_mask size should match mask_for_mem in typical use, but here we 
+        # rescaling to a default or letting caller decide.
+        # Actually, MaskDecoder in export script usually wants the same as input H, W
+        h_out, w_out = high_res_feats_0.shape[2]*4, high_res_feats_0.shape[3]*4
+        frame_size = [h_out, w_out]
         point_inputs = {"point_coords": point_coords, "point_labels": point_labels}
 
         batch_size = point_coords.size()[0]

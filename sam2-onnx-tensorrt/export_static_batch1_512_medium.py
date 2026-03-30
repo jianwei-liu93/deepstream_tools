@@ -26,9 +26,9 @@ def as_tensorrt_compatible(onnx_path):
     print(f"[SUCCESS] {onnx_path} is now TensorRT compatible.")
 
 
-def export_image_encoder(model,onnx_path, batch_size=3):
+def export_image_encoder(model,onnx_path, batch_size=1):
     print(">>> Exporting Image Encoder...")
-    input_img = torch.randn(batch_size, 3, 256, 256).cpu()
+    input_img = torch.randn(batch_size, 3, 512, 512).cpu()
     out = model(input_img)
     output_names = ["pix_feat","high_res_feat0","high_res_feat1","vision_feats","vision_pos_embed"]
     torch.onnx.export(
@@ -36,7 +36,7 @@ def export_image_encoder(model,onnx_path, batch_size=3):
         input_img,
         onnx_path+"image_encoder.onnx",
         export_params=True,
-        opset_version=18,
+        opset_version=15,
         do_constant_folding=True,
         input_names=["image"],
         output_names=output_names,
@@ -47,13 +47,13 @@ def export_image_encoder(model,onnx_path, batch_size=3):
     print(f"[SUCCESS] Image Encoder (Batch {batch_size}) exported successfully!")
 
 
-def export_memory_attention(model,onnx_path, batch_size=3):
+def export_memory_attention(model,onnx_path, batch_size=1):
     print(">>> Exporting Memory Attention...")
-    current_vision_feat = torch.randn(batch_size,256,16,16)      #[batch_size, 256, 16, 16]
-    current_vision_pos_embed = torch.randn(256,batch_size,256)  #[256, batch_size, 256]
+    current_vision_feat = torch.randn(batch_size,256,32,32)      #[batch_size, 256, 32, 32]
+    current_vision_pos_embed = torch.randn(1024,batch_size,256)  #[1024, batch_size, 256]
     memory_0 = torch.randn(batch_size,16,256) # [batch size, num obj ptr, feature size]
-    memory_1 = torch.randn(batch_size,7,64,16,16)
-    memory_pos_embed = torch.randn(batch_size,7*256+64,64)      #[y*256,1,64]
+    memory_1 = torch.randn(batch_size,7,64,32,32)
+    memory_pos_embed = torch.randn(batch_size,7*1024+64,64)      #[y*1024+64,1,64]
     cond_frame_id_diff = torch.tensor(10.0)
     out = model(
             current_vision_feat = current_vision_feat,
@@ -71,6 +71,7 @@ def export_memory_attention(model,onnx_path, batch_size=3):
                 "cond_frame_id_diff",]
     # For MemAttention, keep number of memories dynamic, but batch size static
     # For MemAttention on Jetson (Better Way): Keep axes static to avoid fusion bugs
+    # If you need dynamic frames, you should pad with zeros to the max size (7)
     dynamic_axes = {
         # "memory_0": {1: "num"},
         # "memory_1": {1: "buff_size"},
@@ -81,7 +82,7 @@ def export_memory_attention(model,onnx_path, batch_size=3):
         (current_vision_feat,current_vision_pos_embed,memory_0,memory_1,memory_pos_embed,cond_frame_id_diff),
         onnx_path+"memory_attention.onnx",
         export_params=True,
-        opset_version=18,
+        opset_version=15,
         do_constant_folding=True,
         input_names= input_name,
         output_names=["image_embed"],
@@ -93,13 +94,13 @@ def export_memory_attention(model,onnx_path, batch_size=3):
     print(f"[SUCCESS] Memory Attention (Batch {batch_size}) exported successfully!")
 
 
-def export_mask_decoder(model,onnx_path, batch_size=3):
+def export_mask_decoder(model,onnx_path, batch_size=1):
     print(">>> Exporting Mask Decoder...")
     point_coords = torch.randn(batch_size,2,2).cpu()
     point_labels = torch.randn(batch_size,2).cpu()
-    image_embed = torch.randn(batch_size,256,16,16).cpu()
-    high_res_feats_0 = torch.randn(batch_size,32,64,64).cpu()
-    high_res_feats_1 = torch.randn(batch_size,64,32,32).cpu()
+    image_embed = torch.randn(batch_size,256,32,32).cpu()
+    high_res_feats_0 = torch.randn(batch_size,32,128,128).cpu()
+    high_res_feats_1 = torch.randn(batch_size,64,64,64).cpu()
 
     out = model(
         point_coords = point_coords,
@@ -120,7 +121,7 @@ def export_mask_decoder(model,onnx_path, batch_size=3):
         (point_coords,point_labels,image_embed,high_res_feats_0,high_res_feats_1),
         onnx_path+"mask_decoder.onnx",
         export_params=True,
-        opset_version=18,
+        opset_version=15,
         do_constant_folding=True,
         input_names= input_name,
         output_names=output_name,
@@ -132,10 +133,10 @@ def export_mask_decoder(model,onnx_path, batch_size=3):
     print(f"[SUCCESS] Mask Decoder (Batch {batch_size}) exported successfully!")
 
 
-def export_memory_encoder(model,onnx_path, batch_size=3):
+def export_memory_encoder(model,onnx_path, batch_size=1):
     print(">>> Exporting Memory Encoder...")
-    mask_for_mem = torch.randn(batch_size,1,256,256)
-    pix_feat = torch.randn(batch_size,256,16,16)
+    mask_for_mem = torch.randn(batch_size,1,512,512)
+    pix_feat = torch.randn(batch_size,256,32,32)
     occ_logit = torch.randn(batch_size,1)
 
     out = model(mask_for_mem = mask_for_mem,pix_feat = pix_feat,occ_logit = occ_logit)
@@ -147,7 +148,7 @@ def export_memory_encoder(model,onnx_path, batch_size=3):
         (mask_for_mem,pix_feat,occ_logit),
         onnx_path+"memory_encoder.onnx",
         export_params=True,
-        opset_version=18,
+        opset_version=15,
         do_constant_folding=True,
         input_names= input_names,
         output_names= output_names,
@@ -160,15 +161,22 @@ def export_memory_encoder(model,onnx_path, batch_size=3):
 
 
 if __name__ == "__main__":
-    model_type = "tiny"
-    outdir = "/home/jianwei/vsim/unitree_g1_hw_endpoint/image_processing/sam2_onnx/tiny_batch3_256/"
-    config = "configs/sam2.1/sam2.1_hiera_t_256.yaml"
-    checkpoint = "checkpoints/sam2.1_hiera_tiny.pt"
-    batch_size = 3
+    model_type = "medium"
+    outdir = "/home/jianwei/vsim/unitree_g1_hw_endpoint/image_processing/sam2_onnx/medium_512/"
+    sam2_dir = "/home/jianwei/vsim/vlearn_dev/externals/sam2"
+    config = "configs/sam2.1/sam2.1_hiera_b+.yaml"
+    checkpoint = os.path.join(sam2_dir, "checkpoints/sam2.1_hiera_base_plus.pt")
+    batch_size = 1
 
     os.makedirs(outdir, exist_ok=True)
 
-    sam2_model = build_sam2(config, checkpoint, device="cpu")
+    # Use overrides to set the resolution to 512x512
+    overrides = [
+        "++model.image_size=512",
+        "++model.memory_attention.layer.self_attention.feat_sizes=[32, 32]",
+        "++model.memory_attention.layer.cross_attention.feat_sizes=[32, 32]",
+    ]
+    sam2_model = build_sam2(config, checkpoint, device="cpu", hydra_overrides_extra=overrides)
 
     image_encoder = ImageEncoder(sam2_model).cpu()
     export_image_encoder(image_encoder,outdir, batch_size)
